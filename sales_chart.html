@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Product Sales Line Chart</title>
+
+  <script type="module">
+    //import * as htmlToImage from "https://cdn.jsdelivr.net/npm/html-to-image@1.11.12/+esm"; 
+    import * as htmlToImage from "./libs/html-to-image.js";
+    import { jsPDF } from "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/+esm";
+    import * as plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.10/+esm";
+    window.plot = plot;
+    window.htmlToImage = htmlToImage;
+    window.jsPDF = jsPDF;
+  </script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+    }
+    .control-bar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    select, input[type="month"] {
+      margin: 0.5rem;
+      padding: 0.3rem;
+      font-size: 12px;
+    }
+    button {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    #chart {
+      margin-top: 2rem;
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h2>Monthly Sales Overview</h2>
+  <div class="control-bar">
+    <label>Select Product(s):</label><br />
+    <select id="productSelect" multiple size="6"></select><br />
+
+    <label>Select Date Range:</label><br />
+    <input type="month" id="startDate" />
+    <input type="month" id="endDate" /><br />
+
+    <button id="exportPNG">Export as PNG</button>
+    <button id="exportPDF">Export as PDF</button>
+  </div>
+  <div id="chart"></div>
+
+  <script type="module">
+    async function loadCSV(path) {
+      const response = await fetch(path);
+      const text = await response.text();
+      const rows = text.trim().split('\n');
+      const headers = rows.shift().split(',');
+      return rows.map(row => {
+        const cols = row.split(',');
+        const obj = {};
+        headers.forEach((h, i) => {
+          obj[h.trim()] = cols[i].trim();
+        });
+        return obj;
+      });
+    }
+
+    function parseMonth(str) {
+      const [month, day, year] = str.split('/');
+      return new Date(`${year}-${month.padStart(2, '0')}-01`);
+    }
+
+    function exportAsPNG(targetId, filename = "plot-chart.png") {
+      const node = document.getElementById(targetId);
+      htmlToImage.toPng(node)
+        .then(dataUrl => {
+          const link = document.createElement("a");
+          link.download = filename;
+          link.href = dataUrl;
+          link.click();
+        })
+        .catch(err => console.error("PNG export failed:", err));
+    }
+
+    function exportAsPDF(targetId, filename = "plot-chart.pdf") {
+      const node = document.getElementById(targetId);
+      htmlToImage.toPng(node)
+        .then(dataUrl => {
+          const pdf = new jsPDF();
+          pdf.addImage(dataUrl, "PNG", 15, 15, 180, 100);
+          pdf.save(filename);
+        })
+        .catch(err => console.error("PDF export failed:", err));
+    }
+
+    function patchAndExportChart({
+    targetId = "chart",
+    filename = "plot-export",
+    format = "png"
+    }) {
+      const node = document.getElementById(targetId);
+      if (!node) return console.warn("Chart not found!");
+
+      const originalBg = node.style.backgroundColor;
+      const svg = node.querySelector("svg");
+      const originalOverflow = svg?.style.overflow;
+
+      node.style.backgroundColor = "#fff";
+      if (svg) svg.style.overflow = "visible";
+
+      node.querySelectorAll("text").forEach(el => {
+        el.style.fill = "#000";
+      });
+
+      const handleExport = (dataUrl) => {
+        if (format === "pdf") {
+          const pdf = new window.jsPDF();
+          pdf.addImage(dataUrl, "PNG", 15, 15, 180, 100);
+          pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+        } else {
+          const link = document.createElement("a");
+          link.download = filename.endsWith(".png") ? filename : `${filename}.png`;
+          link.href = dataUrl;
+          link.click();
+        }
+
+        node.style.backgroundColor = originalBg;
+        if (svg) svg.style.overflow = originalOverflow;
+      };
+
+      window.htmlToImage.toPng(node)
+        .then(handleExport)
+        .catch(err => {
+          console.error(`${format.toUpperCase()} export failed:`, err);
+          node.style.backgroundColor = originalBg;
+          if (svg) svg.style.overflow = originalOverflow;
+        });
+    }
+
+    function patchAndExportChart2({ 
+      targetId = "myPlotDiv",
+      filename = "plot-export",
+      format = "png"
+    }) {
+      const node = document.getElementById(targetId);
+      if (!node) return console.warn("Chart container not found.");
+
+      // Create a temporary wrapper around chart
+      const clone = node.cloneNode(true);
+      clone.style.backgroundColor = "#fff";
+      clone.style.display = "inline-block";
+      clone.style.padding = "0";
+      clone.style.margin = "0";
+      clone.style.border = "none";
+      clone.style.boxSizing = "content-box";
+
+      // Hide overflow from misbehaving elements
+      clone.querySelectorAll("svg").forEach(svg => {
+        svg.style.overflow = "visible";
+      });
+
+      document.body.appendChild(clone);
+
+      window.htmlToImage.toCanvas(clone, {
+        pixelRatio: 2,
+        backgroundColor: "#fff"
+      }).then(canvas => {
+        const dataUrl = canvas.toDataURL("image/png");
+
+        if (format === "pdf") {
+          const pdf = new window.jsPDF({
+            orientation: "landscape",
+            unit: "pt",
+            format: [canvas.width, canvas.height]
+          });
+          pdf.addImage(dataUrl, "PNG", 0, 0, canvas.width, canvas.height);
+          pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
+        } else {
+          const link = document.createElement("a");
+          link.download = filename.endsWith(".png") ? filename : `${filename}.png`;
+          link.href = dataUrl;
+          link.click();
+        }
+
+        document.body.removeChild(clone);
+      }).catch(err => {
+        console.error(`${format.toUpperCase()} export failed:`, err);
+        document.body.removeChild(clone);
+      });
+    }
+
+
+    function updateChart(data) {
+      const selectedProducts = Array.from(document.getElementById("productSelect").selectedOptions).map(opt => opt.value);
+      const startDate = new Date(document.getElementById("startDate").value + "-01");
+      const endDate = new Date(document.getElementById("endDate").value + "-01");
+
+      const filtered = data.filter(d =>
+        selectedProducts.includes(d["product name"]) &&
+        parseMonth(d["month/year"]) >= startDate &&
+        parseMonth(d["month/year"]) <= endDate
+      );
+
+      const plotData = filtered.map(d => ({
+        date: parseMonth(d["month/year"]),
+        product: d["product name"],
+        sales: parseFloat(d["sales amount"])
+      }));
+
+      if (plotData.length === 0) {
+        document.getElementById("chart").innerHTML = "<p>No data available for selected filters.</p>";
+        return;
+      }
+
+      const chart = plot.plot({
+        marks: [
+          //plot.axisX(), // ✅ Forces the x-axis to be rendered
+          plot.line(plotData, {
+            x: "date",
+            y: "sales",
+            stroke: "product"
+          }),
+          plot.dot(plotData, {
+            x: "date",
+            y: "sales",
+            stroke: "product",
+            title: d => `${d.date} ${d.product}: $${d.sales.toFixed(2)}`
+          })
+        ],
+        width: 800,
+        height: 500,
+        marginLeft: 50,
+        //marginBottom: 60, // ✅ Adds space for x-axis labels
+        color: { legend: true },
+        x: { label: "Date" },
+        y: { label: "Sales Amount ($)" }
+      });
+
+      const chartDiv = document.getElementById("chart");
+      chartDiv.innerHTML = "";
+      chartDiv.appendChild(chart);
+    }
+
+    const data = await loadCSV("sales_data.csv");
+
+    const products = [...new Set(data.map(d => d["product name"]))];
+    const select = document.getElementById("productSelect");
+    products.forEach(prod => {
+      const option = document.createElement("option");
+      option.value = prod;
+      option.textContent = prod;
+      select.appendChild(option);
+    });
+
+    const dates = [...new Set(data.map(d => parseMonth(d["month/year"])))].sort((a,b) => a-b);
+    document.getElementById("startDate").value = dates[0].toISOString().slice(0,7);
+    document.getElementById("endDate").value = dates[dates.length-1].toISOString().slice(0,7);
+
+    select.options[0].selected = true;
+    select.options[1].selected = true;
+
+    updateChart(data);
+
+    document.getElementById("exportPNG").onclick = () =>
+    patchAndExportChart2({ targetId: "chart", filename: "sales-chart", format: "png" });
+
+    document.getElementById("exportPDF").onclick = () =>
+    patchAndExportChart2({ targetId: "chart", filename: "sales-chart", format: "pdf" });
+
+    document.getElementById("productSelect").addEventListener("change", () => updateChart(data));
+    document.getElementById("startDate").addEventListener("change", () => updateChart(data));
+    document.getElementById("endDate").addEventListener("change", () => updateChart(data));
+  </script>
+</body>
+</html>

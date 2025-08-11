@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Product Filter Dropdown</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+    }
+
+    .dropdown-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    #dropdownToggle {
+      padding: 10px 15px;
+      cursor: pointer;
+      background-color: #bcc3c9;
+      color: rgb(8, 8, 8);
+      border: none;
+      border-radius: 4px;
+    }
+
+    .dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 10px;
+      width: 220px;
+      z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      border-radius: 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #productList {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    #productList label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    #selectedProducts {
+      margin-top: 30px;
+    }
+
+    #selectedProducts ul {
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="dropdown-container">
+    <button id="dropdownToggle">Filter Products ▼</button>
+    <div id="dropdown" class="dropdown hidden">
+      <label><input type="checkbox" id="selectAll" /> Select All</label>
+      <div id="productList"></div>
+    </div>
+  </div>
+
+  <div id="selectedProducts">
+    <h3>Selected Products:</h3>
+    <ul id="selectedList"></ul>
+  </div>
+
+  <script>
+    const products = Array.from({ length: 15 }, (_, i) => `Product ${i + 1}`);
+    const dropdown = document.getElementById('dropdown');
+    const toggleBtn = document.getElementById('dropdownToggle');
+    const productList = document.getElementById('productList');
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const selectedList = document.getElementById('selectedList');
+
+    // Create product checkboxes
+    products.forEach((product, index) => {
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" value="${product}" ${index < 2 ? 'checked' : ''}/> ${product}`;
+      productList.appendChild(label);
+    });
+
+    // Update selected products list
+    function updateSelectedList() {
+      const selected = Array.from(productList.querySelectorAll('input:checked'))
+        .map(input => input.value);
+
+      selectedList.innerHTML = '';
+      selected.forEach(product => {
+        const li = document.createElement('li');
+        li.textContent = product;
+        selectedList.appendChild(li);
+      });
+
+      // Update "Select All" checkbox state
+      const allChecked = productList.querySelectorAll('input:checked').length === products.length;
+      selectAllCheckbox.checked = allChecked;
+    }
+
+    // Toggle dropdown visibility
+    toggleBtn.addEventListener('click', () => {
+      dropdown.classList.toggle('hidden');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    // Handle product checkbox changes
+    productList.addEventListener('change', updateSelectedList);
+
+    // Handle "Select All" checkbox
+    selectAllCheckbox.addEventListener('change', () => {
+      const checkboxes = productList.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+      updateSelectedList();
+    });
+
+    // Initial update
+    updateSelectedList();
+  </script>
+</body>
+</html>
