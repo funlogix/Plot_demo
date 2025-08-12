@@ -39,20 +39,34 @@
     (d) If there are multiple series, create one dot layer per series and merge arrays if you want a single tooltip, 
         or attach multiple helpers with different selectors.
  */
+
+// Checks for compatibility with multiple environments: AMD, CommonJS, and browser globals per standard UMD 
+// (Universal Module Definition) design pattern.
+// Immediately Invoked Function Expression (IIFE), run as soon as it's defined. 
+// root: the global object (window in browsers, global in Node.js).
+// factory: a function that returns the module’s API (NOTE: captial S in SimplePlotTooltip)
+// (a) AMD: Checks if define is available and supports AMD, 
+// If it does, define([], factory) registers the module with no dependencies.
+// (b) Common JS: Checks if module.exports exists—typical in CommonJS (Node.js-style) or bundlers like Browserify.
+// If it does, exports the module using module.exports
+// (c) If neither AMD nor CommonJS is detected, it assumes a Browser global environment.
+// In this case, attach the module to the global object (window or self) as SimplePlotTooltip.
+// (d) Ensures compatibility across environments by Using "self" in web workers and modern browsers,
+//  or "this" in older environments or Node.js..
+
 (function (root, factory) {
   if (typeof define === "function" && define.amd) {
-    // AMD
     define([], factory);
   } else if (typeof module === "object" && module.exports) {
-    // CommonJS
     module.exports = factory();
   } else {
-    // Browser global
     root.SimplePlotTooltip = factory();
   }
 }(typeof self !== "undefined" ? self : this, function () {
-  "use strict";
+  "use strict"; // Enforces stricter parsing and error handling
 
+  // root is typically the "Figure" returned by Plot.plot(...).
+  // We want the main chart SVG, not the legend’s SVG.
   function resolvePlotSVG(root) {
     if (!root) return null;
     if (root instanceof SVGSVGElement) {
@@ -68,6 +82,7 @@
     return root instanceof SVGSVGElement ? root : null;
   }
 
+  // Define style of the tooltip
   function createTooltipElement(className) {
     const tip = document.createElement("div");
     tip.className = className;
@@ -102,6 +117,7 @@
     return Math.max(lo, Math.min(n, hi));
   }
 
+  // Recompute the client-center for each dot element.
   function computeDotCentersClient(els) {
     return Array.from(els, (el) => {
       const r = el.getBoundingClientRect();
