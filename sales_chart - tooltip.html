@@ -56,6 +56,7 @@
 
     <button id="exportPNG">Export as PNG</button>
     <button id="exportPDF">Export as PDF</button>
+    <button id="exportSVG">Export as SVG</button>
   </div>
   <div id="chart"></div>
 
@@ -147,16 +148,15 @@
         });
     }
 
-    function patchAndExportChart2({ 
+    function exportPlotWithLegendToSVG({
       targetId = "myPlotDiv",
-      filename = "plot-export",
-      format = "png"
+      filename = "plot-export"
     }) {
-      const node = document.getElementById(targetId);
-      if (!node) return console.warn("Chart container not found.");
+      const container = document.getElementById(targetId);
+      if (!container) return console.warn("Chart container not found.");
 
-      // Create a temporary wrapper around chart
-      const clone = node.cloneNode(true);
+      // Clone the container to avoid modifying the original
+      const clone = container.cloneNode(true);
       clone.style.backgroundColor = "#fff";
       clone.style.display = "inline-block";
       clone.style.padding = "0";
@@ -164,40 +164,57 @@
       clone.style.border = "none";
       clone.style.boxSizing = "content-box";
 
-      // Hide overflow from misbehaving elements
-      clone.querySelectorAll("svg").forEach(svg => {
-        svg.style.overflow = "visible";
-      });
-
       document.body.appendChild(clone);
 
-      window.htmlToImage.toCanvas(clone, {
-        pixelRatio: 2,
-        backgroundColor: "#fff"
-      }).then(canvas => {
-        const dataUrl = canvas.toDataURL("image/png");
+      // Get bounding box of the entire container
+      const rect = clone.getBoundingClientRect();
+      const width = Math.ceil(rect.width);
+      const height = Math.ceil(rect.height);
 
-        if (format === "pdf") {
-          const pdf = new window.jsPDF({
-            orientation: "landscape",
-            unit: "pt",
-            format: [canvas.width, canvas.height]
-          });
-          pdf.addImage(dataUrl, "PNG", 0, 0, canvas.width, canvas.height);
-          pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
-        } else {
-          const link = document.createElement("a");
-          link.download = filename.endsWith(".png") ? filename : `${filename}.png`;
-          link.href = dataUrl;
-          link.click();
+      // Create SVG wrapper with foreignObject
+      const svgWrapper = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svgWrapper.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      svgWrapper.setAttribute("width", width);
+      svgWrapper.setAttribute("height", height);
+
+      const foreignObject = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+      foreignObject.setAttribute("width", "100%");
+      foreignObject.setAttribute("height", "100%");
+
+      // Apply styles to ensure fonts and layout are preserved
+      const style = document.createElement("style");
+      style.textContent = `
+        svg, div {
+          font-family: sans-serif;
+          font-size: 12px;
+          color: #000;
         }
+      `;
 
-        document.body.removeChild(clone);
-      }).catch(err => {
-        console.error(`${format.toUpperCase()} export failed:`, err);
-        document.body.removeChild(clone);
-      });
+      // Wrap clone in a div to preserve layout
+      const wrapperDiv = document.createElement("div");
+      wrapperDiv.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      wrapperDiv.appendChild(style);
+      wrapperDiv.appendChild(clone);
+
+      foreignObject.appendChild(wrapperDiv);
+      svgWrapper.appendChild(foreignObject);
+
+      // Serialize and export
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgWrapper);
+      const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = filename.endsWith(".svg") ? filename : `${filename}.svg`;
+      link.href = url;
+      link.click();
+
+      // Cleanup
+      URL.revokeObjectURL(url);
+      document.body.removeChild(clone);
     }
+
 
 
     function updateChart(data) {
@@ -304,6 +321,9 @@
 
     document.getElementById("exportPDF").onclick = () =>
     patchAndExportChart2({ targetId: "chart", filename: "sales-chart", format: "pdf" });
+
+    document.getElementById("exportSVG").onclick = () =>
+    exportPlotWithLegendToSVG({ targetId: "chart", filename: "sales-chart"});
 
     document.getElementById("productSelect").addEventListener("change", () => updateChart(data));
     document.getElementById("startDate").addEventListener("change", () => updateChart(data));
